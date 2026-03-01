@@ -115,7 +115,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ sk
         <div style={{ background: "#1A1A1F", borderRadius: 16, padding: 24, border: "1px solid #2A2A35" }}>
           <h2 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 600, color: "#F9FAFB" }}>Live Test Panel</h2>
           {isLive ? (
-            <TestSkillPanel slug={skill.slug} priceUsd={skill.priceUsd} inputSchema={skill.inputSchema || {}} />
+            <TestSkillPanel slug={skill.slug} priceUsd={skill.priceUsd} inputSchema={(skill.inputSchema || {}) as Record<string, string>} />
           ) : (
             <div style={{ padding: 32, textAlign: "center", color: "#4B5563", background: "#111827", borderRadius: 10 }}>
               <Activity size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
@@ -128,7 +128,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ sk
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ background: "#1A1A1F", borderRadius: 16, padding: 24, border: "1px solid #2A2A35" }}>
             <h2 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 600, color: "#F9FAFB" }}>SDK Snippet</h2>
-            <SDKSnippet slug={skill.slug} endpointUrl={skill.endpointUrl || ""} inputSchema={skill.inputSchema || {}} />
+            <SDKSnippet slug={skill.slug} endpointUrl={skill.endpointUrl || ""} inputSchema={(skill.inputSchema || {}) as Record<string, string>} />
           </div>
 
           <div style={{ background: "#1A1A1F", borderRadius: 16, padding: 24, border: "1px solid #2A2A35" }}>
