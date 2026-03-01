@@ -49,12 +49,6 @@ export default async function HomePage() {
       {/* Hero Section */}
       <section style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "100px 24px 80px" }}>
         <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
-          {/* Badge */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 16px", borderRadius: 100, background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", marginBottom: 32 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
-            <span style={{ fontSize: 13, color: "#8B5CF6", fontWeight: 500 }}>PinionOS Hackathon 2026</span>
-          </div>
-
           {/* Headline */}
           <h1 style={{ fontSize: "clamp(42px, 7vw, 76px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", margin: "0 0 24px", color: "#F9FAFB" }}>
             Build & sell AI skills{" "}
