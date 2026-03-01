@@ -1,0 +1,21 @@
+# env files — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+
+# Skill runtime processes
+.skill-processes/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tsbuildinfo
