@@ -6,7 +6,6 @@ import { Navbar } from "@/components/Navbar";
 export const metadata: Metadata = {
   title: "PILA — No-Code PinionOS Skill Builder",
   description: "Build & sell AI skills in 2 minutes. No code. No servers. Just describe it — we deploy it.",
-  icons: { icon: "/logo.png", apple: "/logo.png" },
   openGraph: {
     title: "PILA — No-Code PinionOS Skill Builder",
     description: "Deploy earning x402 skills in 2 minutes. No code required.",
