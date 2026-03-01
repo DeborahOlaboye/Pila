@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { Zap, Code2, Rocket, TrendingUp, ChevronRight, Shield, Globe, Cpu } from "lucide-react";
+import { Code2, TrendingUp, ChevronRight, Shield, Globe, Cpu } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 
 async function getStats() {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/stats`, { next: { revalidate: 30 } });
-    if (!res.ok) return { skills: 0, earned: 0, calls: 0 };
-    return res.json();
+    const [skillCount, earningsResult, callResult] = await Promise.all([
+      prisma.skill.count({ where: { status: "LIVE" } }),
+      prisma.skill.aggregate({ _sum: { totalEarned: true } }),
+      prisma.skill.aggregate({ _sum: { totalCalls: true } }),
+    ]);
+    return {
+      skills: skillCount,
+      earned: earningsResult._sum.totalEarned ?? 0,
+      calls: callResult._sum.totalCalls ?? 0,
+    };
   } catch {
     return { skills: 0, earned: 0, calls: 0 };
   }
@@ -14,11 +21,15 @@ async function getStats() {
 
 async function getFeaturedSkills() {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/skills`, { next: { revalidate: 30 } });
-    if (!res.ok) return [];
-    const skills = await res.json();
-    return skills.slice(0, 4);
+    return await prisma.skill.findMany({
+      where: { status: "LIVE" },
+      orderBy: { totalCalls: "desc" },
+      take: 4,
+      select: {
+        id: true, name: true, description: true,
+        priceUsd: true, totalCalls: true, totalEarned: true,
+      },
+    });
   } catch {
     return [];
   }
