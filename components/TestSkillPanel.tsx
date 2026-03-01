@@ -15,6 +15,18 @@ const TYPE_LABEL: Record<string, string> = {
   boolean: "Yes / No",
 };
 
+function humanize(key: string): string {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+function isNumeric(val: unknown): boolean {
+  return !isNaN(parseFloat(String(val))) && String(val).trim() !== "";
+}
+
 function initFields(schema: Record<string, string>): Record<string, string | number | boolean> {
   return Object.fromEntries(
     Object.entries(schema).map(([k, t]) =>
@@ -67,11 +79,8 @@ export function TestSkillPanel({ slug, priceUsd, inputSchema }: Props) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {Object.entries(inputSchema).map(([key, type]) => (
             <div key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 500, color: "#9CA3AF", display: "flex", alignItems: "center", gap: 8 }}>
-                {key}
-                <span style={{ fontSize: 11, color: "#4B5563", fontWeight: 400 }}>
-                  ({TYPE_LABEL[type] ?? type})
-                </span>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#9CA3AF" }}>
+                {humanize(key)}
               </label>
               {type === "boolean" ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -146,25 +155,41 @@ export function TestSkillPanel({ slug, priceUsd, inputSchema }: Props) {
 
       {/* Result */}
       {result && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ borderRadius: 12, border: "1px solid rgba(16,185,129,0.25)", overflow: "hidden" }}>
+          {/* Header bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "rgba(16,185,129,0.08)", borderBottom: "1px solid rgba(16,185,129,0.15)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <CheckCircle2 size={16} style={{ color: "#10B981" }} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#10B981" }}>Success</span>
+              <CheckCircle2 size={15} style={{ color: "#10B981" }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#10B981" }}>Skill responded successfully</span>
             </div>
             {latency && (
-              <span style={{ fontSize: 12, color: "#6B7280", fontFamily: "monospace" }}>{latency}ms</span>
+              <span style={{ fontSize: 12, color: "#6B7280" }}>{latency}ms</span>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {Object.entries(result).map(([key, val]) => (
-              <div key={key} style={{ display: "flex", gap: 12, padding: "12px 16px", background: "#0F172A", borderRadius: 8, border: "1px solid #1E293B", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", minWidth: 90, paddingTop: 1, textTransform: "capitalize" }}>{key}</span>
-                <span style={{ fontSize: 14, color: "#86EFAC", fontFamily: "JetBrains Mono, monospace", wordBreak: "break-all" }}>
-                  {typeof val === "boolean" ? (val ? "Yes" : "No") : String(val ?? "—")}
-                </span>
-              </div>
-            ))}
+
+          {/* Fields */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 1, background: "#111827" }}>
+            {Object.entries(result).map(([key, val]) => {
+              const display = typeof val === "boolean" ? (val ? "Yes" : "No") : String(val ?? "—");
+              const numeric = isNumeric(val);
+              return (
+                <div key={key} style={{ padding: "16px 20px", borderBottom: "1px solid #1F2937" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                    {humanize(key)}
+                  </div>
+                  <div style={{
+                    fontSize: numeric ? 32 : 18,
+                    fontWeight: 700,
+                    color: numeric ? "#8B5CF6" : "#F9FAFB",
+                    fontFamily: numeric ? "JetBrains Mono, monospace" : "Inter, sans-serif",
+                    lineHeight: 1.2,
+                    wordBreak: "break-word",
+                  }}>
+                    {display}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
