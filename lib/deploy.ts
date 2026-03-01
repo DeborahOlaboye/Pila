@@ -9,26 +9,25 @@ import { buildSkillCode } from "@/skill-runtime/template";
 const runningProcesses = new Map<string, ChildProcess>();
 let nextPort = 4100;
 
-function allocatePort(): number {
-  return nextPort++;
-}
-
 const isVercel = !!process.env.VERCEL;
 
-/** Kill any process listening on `port` (best-effort, non-fatal). */
-async function freePort(port: number): Promise<void> {
-  try {
-    const { execSync } = await import("child_process");
-    // lsof works on macOS/Linux; suppress errors on Windows/no match
-    const pids = execSync(`lsof -ti tcp:${port}`, { stdio: ["ignore", "pipe", "ignore"] })
-      .toString()
-      .trim()
-      .split("\n")
-      .filter(Boolean);
-    for (const pid of pids) {
-      try { process.kill(parseInt(pid), "SIGKILL"); } catch { /* already gone */ }
-    }
-  } catch { /* lsof not available or no process on port */ }
+/** Check if a TCP port is free by attempting to bind to it. */
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const net = require("net");
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => server.close(() => resolve(true)));
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+/** Allocate the next free port starting from nextPort. */
+async function allocatePort(): Promise<number> {
+  while (true) {
+    const port = nextPort++;
+    if (await isPortFree(port)) return port;
+  }
 }
 
 export async function deploySkill(skill: {
@@ -56,7 +55,7 @@ export async function deploySkill(skill: {
   const tmpDir = path.join(skillsDir, `skill-${skill.id}`);
   await fs.mkdir(tmpDir, { recursive: true });
   const skillFile = path.join(tmpDir, "index.mjs");
-  const port = allocatePort();
+  const port = await allocatePort();
 
   // Write a wrapper that sends IPC "ready" message back
   const wrapperCode = buildSkillCode({
@@ -69,9 +68,6 @@ export async function deploySkill(skill: {
   });
   await fs.writeFile(skillFile, wrapperCode);
 
-  // Kill anything still occupying this port (e.g. a zombie from a previous deploy)
-  await freePort(port);
-
   const projectRoot = path.resolve(process.cwd());
   const child = spawn(process.execPath, [skillFile], {
     env: {
@@ -83,7 +79,6 @@ export async function deploySkill(skill: {
         process.env.FACILITATOR_URL || "https://x402.org/facilitator",
       PINION_NETWORK: process.env.PINION_NETWORK || "base",
       PILA_IPC: "1",
-      // Allow temp skill file to resolve node_modules from project root
       NODE_PATH: path.join(projectRoot, "node_modules"),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -194,9 +189,6 @@ export async function restartLiveSkills(): Promise<void> {
         walletAddress: skill.walletAddress!,
       });
       await fs.writeFile(skillFile, wrapperCode);
-
-      // Free the port in case a zombie is still holding it
-      await freePort(skill.port);
 
       const projectRoot = path.resolve(process.cwd());
       const child = spawn(process.execPath, [skillFile], {
