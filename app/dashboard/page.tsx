@@ -81,8 +81,14 @@ export default function DashboardPage() {
   }
 
   async function handleStart(id: string) {
-    await fetch(`/api/skills/${id}/deploy`, { method: "POST" });
     setSkills((prev) => prev.map((s) => s.id === id ? { ...s, status: "DEPLOYING" } : s));
+    const res = await fetch(`/api/skills/${id}/deploy`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      toast.error(`Deploy failed: ${body.detail || body.error || res.status}`, { duration: 15000 });
+      setSkills((prev) => prev.map((s) => s.id === id ? { ...s, status: "ERROR" } : s));
+      return;
+    }
     setTimeout(async () => {
       try {
         const res = await fetch("/api/skills?mine=1");
