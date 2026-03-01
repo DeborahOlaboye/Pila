@@ -22,6 +22,28 @@ export async function GET(
   return NextResponse.json(skill);
 }
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ skillId: string }> }
+) {
+  const { skillId } = await params;
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.name) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const skill = await prisma.skill.findUnique({ where: { id: skillId }, include: { user: true } });
+  if (!skill) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (skill.user.address !== session.user.name.toLowerCase())
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const body = await req.json();
+  const priceUsd = typeof body.priceUsd === "number" ? body.priceUsd : parseFloat(body.priceUsd);
+  if (isNaN(priceUsd) || priceUsd <= 0)
+    return NextResponse.json({ error: "priceUsd must be a positive number" }, { status: 400 });
+
+  const updated = await prisma.skill.update({ where: { id: skillId }, data: { priceUsd } });
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ skillId: string }> }

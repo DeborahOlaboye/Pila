@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Play, Square, Trash2, TrendingUp, Zap, BarChart3, Wallet, ExternalLink } from "lucide-react";
+import { Play, Square, Trash2, TrendingUp, Zap, BarChart3, Wallet, ExternalLink, Pencil, Check, X } from "lucide-react";
 import { EarningsChart } from "@/components/EarningsChart";
 import { Skill } from "@/types";
 
@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState<{ date: string; earned: number; calls: number }[]>([]);
   const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState<{ id: string; value: string } | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") { router.push("/"); }
@@ -72,6 +73,19 @@ export default function DashboardPage() {
     if (!confirm("Delete this skill?")) return;
     await fetch(`/api/skills/${id}`, { method: "DELETE" });
     setSkills((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  async function handleSavePrice(id: string) {
+    if (!editingPrice) return;
+    const price = parseFloat(editingPrice.value);
+    if (isNaN(price) || price <= 0) { setEditingPrice(null); return; }
+    await fetch(`/api/skills/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priceUsd: price }),
+    });
+    setSkills((prev) => prev.map((s) => s.id === id ? { ...s, priceUsd: price } : s));
+    setEditingPrice(null);
   }
 
   async function handleWithdraw(id: string) {
@@ -183,7 +197,7 @@ export default function DashboardPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #2A2A35" }}>
-                  {["Name", "Status", "Calls", "Earned", "Endpoint", "Actions"].map((h) => (
+                  {["Name", "Status", "Price", "Calls", "Earned", "Endpoint", "Actions"].map((h) => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
                   ))}
                 </tr>
@@ -193,6 +207,30 @@ export default function DashboardPage() {
                   <tr key={s.id} style={{ borderBottom: "1px solid #1F2937", transition: "background 0.15s" }}>
                     <td style={{ padding: "14px 16px", fontSize: 14, fontWeight: 500, color: "#F9FAFB" }}>{s.name}</td>
                     <td style={{ padding: "14px 16px" }}><StatusBadge status={s.status} /></td>
+                    <td style={{ padding: "14px 16px" }}>
+                      {editingPrice?.id === s.id ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ color: "#6B7280", fontSize: 13 }}>$</span>
+                          <input
+                            autoFocus
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            value={editingPrice.value}
+                            onChange={(e) => setEditingPrice({ id: s.id, value: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSavePrice(s.id); if (e.key === "Escape") setEditingPrice(null); }}
+                            style={{ width: 70, padding: "3px 6px", borderRadius: 5, border: "1px solid #7C3AED", background: "#111827", color: "#F9FAFB", fontSize: 13, outline: "none" }}
+                          />
+                          <button onClick={() => handleSavePrice(s.id)} style={{ padding: 3, background: "transparent", border: "none", color: "#10B981", cursor: "pointer" }}><Check size={13} /></button>
+                          <button onClick={() => setEditingPrice(null)} style={{ padding: 3, background: "transparent", border: "none", color: "#6B7280", cursor: "pointer" }}><X size={13} /></button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ fontSize: 13, color: "#8B5CF6", fontFamily: "monospace" }}>${s.priceUsd.toFixed(2)}</span>
+                          <button onClick={() => setEditingPrice({ id: s.id, value: String(s.priceUsd) })} style={{ padding: 2, background: "transparent", border: "none", color: "#4B5563", cursor: "pointer" }}><Pencil size={11} /></button>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: "14px 16px", fontSize: 13, color: "#D1D5DB", fontFamily: "monospace" }}>{s.totalCalls.toLocaleString()}</td>
                     <td style={{ padding: "14px 16px", fontSize: 13, color: "#10B981", fontFamily: "monospace" }}>${s.totalEarned.toFixed(4)}</td>
                     <td style={{ padding: "14px 16px" }}>
