@@ -196,11 +196,14 @@ export default function DashboardPage() {
                     <td style={{ padding: "14px 16px", fontSize: 13, color: "#D1D5DB", fontFamily: "monospace" }}>{s.totalCalls.toLocaleString()}</td>
                     <td style={{ padding: "14px 16px", fontSize: 13, color: "#10B981", fontFamily: "monospace" }}>${s.totalEarned.toFixed(4)}</td>
                     <td style={{ padding: "14px 16px" }}>
-                      {s.endpointUrl ? (
-                        <a href={s.endpointUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}>
-                          {s.endpointUrl.slice(0, 32)}... <ExternalLink size={10} />
-                        </a>
-                      ) : <span style={{ color: "#374151", fontSize: 12 }}>—</span>}
+                      {s.slug ? (() => {
+                        const url = `${typeof window !== "undefined" ? window.location.origin : ""}/api/proxy/${s.slug}`;
+                        return (
+                          <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}>
+                            /api/proxy/{s.slug} <ExternalLink size={10} />
+                          </a>
+                        );
+                      })() : <span style={{ color: "#374151", fontSize: 12 }}>—</span>}
                     </td>
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", gap: 6 }}>

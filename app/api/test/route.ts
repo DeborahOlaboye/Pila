@@ -10,15 +10,33 @@ export async function POST(req: NextRequest) {
   }
 
   const start = Date.now();
+  let upstreamRes: Response;
   try {
-    const res = await fetch(`http://localhost:${skill.port}/run`, {
+    upstreamRes = await fetch(`http://localhost:${skill.port}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input || {}),
     });
-    const data = await res.json();
-    return NextResponse.json({ result: data, latencyMs: Date.now() - start });
   } catch {
     return NextResponse.json({ error: "Skill process is not running. Go to your Dashboard and redeploy the skill." }, { status: 503 });
   }
+
+  const durationMs = Date.now() - start;
+  const success = upstreamRes.status === 200;
+  const data = await upstreamRes.json();
+
+  // Track call stats (fire and forget)
+  prisma.skillCall
+    .create({ data: { skillId: skill.id, paidUsd: success ? skill.priceUsd : 0, success, durationMs } })
+    .then(() => {
+      if (success) {
+        prisma.skill.update({
+          where: { id: skill.id },
+          data: { totalCalls: { increment: 1 }, totalEarned: { increment: skill.priceUsd }, lastCalledAt: new Date() },
+        }).catch(() => {});
+      }
+    })
+    .catch(() => {});
+
+  return NextResponse.json({ result: data, latencyMs: durationMs });
 }
