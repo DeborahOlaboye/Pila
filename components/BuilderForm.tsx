@@ -189,7 +189,7 @@ export function BuilderForm() {
           disabled={generating || !session}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "12px 0", borderRadius: 10, border: "none",
+            padding: "12px 0", borderRadius: 10,
             background: !session ? "#2D2D35" : generating ? "#374151" : "linear-gradient(135deg, #7C3AED, #8B5CF6)",
             color: !session ? "#6B7280" : "white", fontSize: 14, fontWeight: 600,
             cursor: generating || !session ? "not-allowed" : "pointer",
