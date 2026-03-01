@@ -180,7 +180,7 @@ export function ConnectWallet() {
                     <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12 }}>
                       {account.displayName}
                     </span>
-                    {account.displayBalance && (
+                    {account.displayBalance && !account.displayBalance.includes("NaN") && (
                       <span style={{ color: "#6B7280", fontSize: 11 }}>
                         {account.displayBalance}
                       </span>

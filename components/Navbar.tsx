@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Zap, LayoutGrid, PlusCircle, BarChart3 } from "lucide-react";
+import { LayoutGrid, PlusCircle, BarChart3 } from "lucide-react";
 import { ConnectWallet } from "./ConnectWallet";
 
 export function Navbar() {
@@ -30,13 +31,7 @@ export function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", height: 64, gap: 8 }}>
         {/* Logo */}
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", marginRight: 32 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "linear-gradient(135deg, #7C3AED, #06B6D4)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Zap size={18} color="white" fill="white" />
-          </div>
+          <Image src="/logo.png" alt="PILA" width={36} height={36} style={{ borderRadius: 8 }} />
           <span style={{ fontWeight: 700, fontSize: 18, color: "#F9FAFB", letterSpacing: "-0.02em" }}>PILA</span>
         </Link>
 
