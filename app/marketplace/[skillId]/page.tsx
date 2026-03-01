@@ -4,22 +4,42 @@ import { ArrowLeft, Download, Zap, Clock, TrendingUp, Activity } from "lucide-re
 import { TestSkillPanel } from "@/components/TestSkillPanel";
 import { SDKSnippet } from "@/components/SDKSnippet";
 import { CATEGORY_ICONS, CATEGORY_LABELS } from "@/lib/constants";
+import { prisma } from "@/lib/prisma";
 
 async function getSkill(id: string) {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/skills/${id}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return res.json();
+    return await prisma.skill.findUnique({
+      where: { id },
+      select: {
+        id: true, name: true, slug: true, description: true, category: true,
+        priceUsd: true, totalCalls: true, totalEarned: true, status: true,
+        endpointUrl: true, walletAddress: true, tags: true, inputSchema: true,
+        outputSchema: true, handlerCode: true, createdAt: true, updatedAt: true,
+        user: { select: { address: true } },
+      },
+    });
   } catch { return null; }
 }
 
 async function getMetrics(id: string) {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/skills/${id}/metrics`, { cache: "no-store" });
-    if (!res.ok) return { totalCalls: 0, totalEarned: 0, avgLatency: 0 };
-    return res.json();
+    const [skill, calls] = await Promise.all([
+      prisma.skill.findUnique({
+        where: { id },
+        select: { totalCalls: true, totalEarned: true },
+      }),
+      prisma.skillCall.findMany({
+        where: { skillId: id },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { durationMs: true },
+      }),
+    ]);
+    if (!skill) return { totalCalls: 0, totalEarned: 0, avgLatency: 0 };
+    const avgLatency = calls.length > 0
+      ? Math.round(calls.reduce((s, c) => s + c.durationMs, 0) / calls.length)
+      : 0;
+    return { totalCalls: skill.totalCalls, totalEarned: skill.totalEarned, avgLatency };
   } catch { return { totalCalls: 0, totalEarned: 0, avgLatency: 0 }; }
 }
 
