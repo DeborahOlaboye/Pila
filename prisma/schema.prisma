@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  address   String   @unique
+  createdAt DateTime @default(now())
+  skills    Skill[]
+}
+
+model Skill {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+
+  name        String
+  slug        String        @unique
+  description String
+  category    SkillCategory
+  tags        String[]
+
+  priceUsd    Float
+
+  inputSchema  Json
+  outputSchema Json
+
+  handlerCode String
+
+  status        SkillStatus @default(DRAFT)
+  walletAddress String?
+  walletKey     String?
+  port          Int?
+  endpointUrl   String?
+  processId     String?
+
+  totalCalls   Int      @default(0)
+  totalEarned  Float    @default(0)
+  lastCalledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  calls SkillCall[]
+}
+
+model SkillCall {
+  id         String   @id @default(cuid())
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  callerAddr String?
+  paidUsd    Float
+  success    Boolean
+  durationMs Int
+  createdAt  DateTime @default(now())
+}
+
+enum SkillStatus {
+  DRAFT
+  DEPLOYING
+  LIVE
+  STOPPED
+  ERROR
+}
+
+enum SkillCategory {
+  DATA
+  FINANCE
+  AI
+  UTILITY
+  SOCIAL
+  DEVELOPER
+  CUSTOM
+}
