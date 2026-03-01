@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Wand2, Rocket, CheckCircle, Copy, Download, X } from "lucide-react";
+import { Loader2, Wand2, Rocket, CheckCircle, Copy, Download, X, Plus, Trash2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { DeploymentStatus } from "./DeploymentStatus";
 import { SDKSnippet } from "./SDKSnippet";
 
-const MONACO_AVAILABLE = typeof window !== "undefined";
+interface SchemaField { name: string; type: string }
 
 interface DeployedSkill {
   id: string;
@@ -18,6 +18,62 @@ interface DeployedSkill {
   inputSchema: Record<string, string>;
 }
 
+const TYPE_OPTIONS = [
+  { value: "string", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "boolean", label: "Yes / No" },
+];
+
+function FieldBuilder({ fields, onChange, placeholder }: {
+  fields: SchemaField[];
+  onChange: (fields: SchemaField[]) => void;
+  placeholder: string;
+}) {
+  function add() { onChange([...fields, { name: "", type: "string" }]); }
+  function remove(i: number) { onChange(fields.filter((_, idx) => idx !== i)); }
+  function update(i: number, key: "name" | "type", val: string) {
+    const next = [...fields];
+    next[i] = { ...next[i], [key]: val };
+    onChange(next);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {fields.map((f, i) => (
+        <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            value={f.name}
+            onChange={(e) => update(i, "name", e.target.value)}
+            placeholder={placeholder}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <select
+            value={f.type}
+            onChange={(e) => update(i, "type", e.target.value)}
+            style={{ ...inputStyle, width: 110 }}
+          >
+            {TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => remove(i)}
+            style={{ padding: "8px", borderRadius: 6, border: "1px solid #2A2A35", background: "transparent", color: "#6B7280", cursor: "pointer", display: "flex" }}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={add}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px dashed #3A3A45", background: "transparent", color: "#8B5CF6", fontSize: 13, cursor: "pointer", width: "fit-content" }}
+      >
+        <Plus size={13} /> Add field
+      </button>
+    </div>
+  );
+}
+
 export function BuilderForm() {
   const { data: session } = useSession();
 
@@ -25,11 +81,12 @@ export function BuilderForm() {
     name: "",
     category: "CUSTOM" as keyof typeof CATEGORY_LABELS,
     description: "",
-    inputSchema: "{}",
-    outputSchema: '{"result": "string"}',
     priceUsd: "0.02",
     tags: "",
   });
+  const [inputFields, setInputFields] = useState<SchemaField[]>([]);
+  const [outputFields, setOutputFields] = useState<SchemaField[]>([{ name: "result", type: "string" }]);
+
   const [generatedCode, setGeneratedCode] = useState("");
   const [editedCode, setEditedCode] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -37,20 +94,21 @@ export function BuilderForm() {
   const [deployDone, setDeployDone] = useState(false);
   const [deployedSkill, setDeployedSkill] = useState<DeployedSkill | null>(null);
   const [error, setError] = useState("");
-  const [skillId, setSkillId] = useState<string | null>(null);
 
   const code = editedCode || generatedCode;
 
+  function buildSchemas() {
+    const inputSchema = Object.fromEntries(inputFields.filter(f => f.name.trim()).map(f => [f.name.trim(), f.type]));
+    const outputSchema = Object.fromEntries(outputFields.filter(f => f.name.trim()).map(f => [f.name.trim(), f.type]));
+    return { inputSchema, outputSchema };
+  }
+
   async function handleGenerate() {
     setError("");
-    if (!form.name || !form.description) { setError("Name and description are required."); return; }
+    if (!form.name || !form.description) { setError("Skill name and description are required."); return; }
     setGenerating(true);
     try {
-      let inputSchema: Record<string, string> = {};
-      let outputSchema: Record<string, string> = {};
-      try { inputSchema = JSON.parse(form.inputSchema); } catch { setError("Invalid input schema JSON"); setGenerating(false); return; }
-      try { outputSchema = JSON.parse(form.outputSchema); } catch { setError("Invalid output schema JSON"); setGenerating(false); return; }
-
+      const { inputSchema, outputSchema } = buildSchemas();
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,12 +128,8 @@ export function BuilderForm() {
     setDeploying(true);
     setDeployDone(false);
     try {
-      let inputSchema: Record<string, string> = {};
-      let outputSchema: Record<string, string> = {};
-      try { inputSchema = JSON.parse(form.inputSchema); } catch { /**/ }
-      try { outputSchema = JSON.parse(form.outputSchema); } catch { /**/ }
+      const { inputSchema, outputSchema } = buildSchemas();
 
-      // Create skill
       const createRes = await fetch("/api/skills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,9 +141,7 @@ export function BuilderForm() {
       });
       const created = await createRes.json();
       if (!createRes.ok) throw new Error(created.error || "Create failed");
-      setSkillId(created.id);
 
-      // Deploy
       const deployRes = await fetch(`/api/skills/${created.id}/deploy`, { method: "POST" });
       const deployed = await deployRes.json();
       if (!deployRes.ok) throw new Error(deployed.error || "Deploy failed");
@@ -134,7 +186,7 @@ export function BuilderForm() {
           <a href={`/api/plugin/${deployedSkill.id}`} download="openclaw.plugin.json" style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #2A2A35", background: "transparent", color: "#9CA3AF", textDecoration: "none", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
             <Download size={15} /> Plugin JSON
           </a>
-          <button onClick={() => { setDeployedSkill(null); setGeneratedCode(""); setEditedCode(""); setForm({ name: "", category: "CUSTOM", description: "", inputSchema: "{}", outputSchema: '{"result":"string"}', priceUsd: "0.02", tags: "" }); }} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #2A2A35", background: "transparent", color: "#6B7280", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={() => { setDeployedSkill(null); setGeneratedCode(""); setEditedCode(""); setForm({ name: "", category: "CUSTOM", description: "", priceUsd: "0.02", tags: "" }); setInputFields([]); setOutputFields([{ name: "result", type: "string" }]); }} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #2A2A35", background: "transparent", color: "#6B7280", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
             <X size={15} /> Build Another
           </button>
         </div>
@@ -168,12 +220,12 @@ export function BuilderForm() {
           <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} placeholder="Returns the current crypto market fear & greed index (0-100) with a market interpretation." style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
 
-        <Field label="Input Parameters" hint='What data does your skill receive? Use {"paramName": "type"} — e.g. {"city": "string", "units": "string"}. Leave {} if your skill needs no inputs.'>
-          <textarea value={form.inputSchema} onChange={(e) => setForm((f) => ({ ...f, inputSchema: e.target.value }))} rows={3} placeholder='{"city": "string"}' style={{ ...inputStyle, fontFamily: "JetBrains Mono, monospace", fontSize: 12, resize: "vertical" }} />
+        <Field label="Input Fields" hint="What information does this skill need from the caller? Add one field per row.">
+          <FieldBuilder fields={inputFields} onChange={setInputFields} placeholder="e.g. city, symbol, amount" />
         </Field>
 
-        <Field label="Output Fields" hint='What does your skill return? Use {"fieldName": "type"} — e.g. {"temperature": "number", "description": "string"}.'>
-          <textarea value={form.outputSchema} onChange={(e) => setForm((f) => ({ ...f, outputSchema: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: "JetBrains Mono, monospace", fontSize: 12, resize: "vertical" }} />
+        <Field label="Output Fields" hint="What does this skill return? Add one field per row.">
+          <FieldBuilder fields={outputFields} onChange={setOutputFields} placeholder="e.g. price, score, message" />
         </Field>
 
         <Field label="Price per call (USDC)">
