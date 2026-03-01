@@ -1,19 +1,12 @@
 import Link from "next/link";
-import { Code2, TrendingUp, ChevronRight, Shield, Globe, Cpu } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { Zap, Code2, Rocket, TrendingUp, ChevronRight, Shield, Globe, Cpu } from "lucide-react";
 
 async function getStats() {
   try {
-    const [skillCount, earningsResult, callResult] = await Promise.all([
-      prisma.skill.count({ where: { status: "LIVE" } }),
-      prisma.skill.aggregate({ _sum: { totalEarned: true } }),
-      prisma.skill.aggregate({ _sum: { totalCalls: true } }),
-    ]);
-    return {
-      skills: skillCount,
-      earned: earningsResult._sum.totalEarned ?? 0,
-      calls: callResult._sum.totalCalls ?? 0,
-    };
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const res = await fetch(`${base}/api/stats`, { next: { revalidate: 30 } });
+    if (!res.ok) return { skills: 0, earned: 0, calls: 0 };
+    return res.json();
   } catch {
     return { skills: 0, earned: 0, calls: 0 };
   }
@@ -21,15 +14,11 @@ async function getStats() {
 
 async function getFeaturedSkills() {
   try {
-    return await prisma.skill.findMany({
-      where: { status: "LIVE" },
-      orderBy: { totalCalls: "desc" },
-      take: 4,
-      select: {
-        id: true, name: true, description: true,
-        priceUsd: true, totalCalls: true, totalEarned: true,
-      },
-    });
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const res = await fetch(`${base}/api/skills`, { next: { revalidate: 30 } });
+    if (!res.ok) return [];
+    const skills = await res.json();
+    return skills.slice(0, 4);
   } catch {
     return [];
   }
@@ -49,6 +38,12 @@ export default async function HomePage() {
       {/* Hero Section */}
       <section style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "100px 24px 80px" }}>
         <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
+          {/* Badge */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 16px", borderRadius: 100, background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", marginBottom: 32 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+            <span style={{ fontSize: 13, color: "#8B5CF6", fontWeight: 500 }}>Pila</span>
+          </div>
+
           {/* Headline */}
           <h1 style={{ fontSize: "clamp(42px, 7vw, 76px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", margin: "0 0 24px", color: "#F9FAFB" }}>
             Build & sell AI skills{" "}

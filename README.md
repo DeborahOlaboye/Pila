@@ -2,17 +2,13 @@
 
 > Deploy earning PinionOS x402 skills in 2 minutes. No code required.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
-[![Built on PinionOS](https://img.shields.io/badge/Built%20on-PinionOS-blueviolet)](https://pinion.xyz)
-[![Base Network](https://img.shields.io/badge/Network-Base-blue)](https://base.org)
-
 ## What Is It?
 
 PILA is a no-code platform built on PinionOS. Describe your skill in plain English, set a USDC price, and PILA:
 
-1. **Generates** TypeScript handler code via Claude AI
+1. **Generates** TypeScript handler code via Groq (Llama 3.3 70B)
 2. **Deploys** a live x402-paywalled endpoint instantly
-3. **Earns** USDC automatically — settled on Base via `facilitator.payai.network`
+3. **Earns** USDC automatically — settled on Base via the x402 facilitator
 
 No TypeScript knowledge, server setup, or wallet management required.
 
@@ -47,7 +43,7 @@ server.add(
 server.listen(port);
 ```
 
-Each skill has a **dedicated wallet**. USDC from x402 payments settles directly to that wallet on Base via `facilitator.payai.network`. No shared treasury — creators own their earnings.
+Each skill has a **dedicated wallet**. USDC from x402 payments settles directly to that wallet on Base via the x402 facilitator. No shared treasury — creators own their earnings.
 
 ### 2. PinionClient (Live Test Panel)
 
@@ -79,8 +75,9 @@ const { address } = privateKeyToAccount(privateKey);
 
 ## Features
 
-- **No-code skill builder** — Describe in English, Claude writes the TypeScript
+- **No-code skill builder** — Describe in English, Groq (Llama 3.3 70B) writes the TypeScript
 - **One-click deployment** — Live x402 endpoint in under 2 minutes
+- **Auto-restart on boot** — Live skills are automatically restarted when the server restarts
 - **Public marketplace** — Search, filter, live test panel, SDK snippets
 - **Real-time earnings dashboard** — USDC tracking with 7-day chart
 - **OpenClaw integration** — Auto-generated `openclaw.plugin.json` for every skill
@@ -92,13 +89,13 @@ const { address } = privateKeyToAccount(privateKey);
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| Backend | Next.js API Routes, Prisma ORM |
+| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS v4 |
+| UI Components | Monaco Editor, Recharts, lucide-react, sonner, RainbowKit |
+| Backend | Next.js API Routes, Prisma ORM 5 |
 | Database | PostgreSQL (Supabase) |
-| AI | Claude API (`claude-opus-4-6`) |
-| Blockchain | PinionOS, viem, Base Network |
-| Auth | NextAuth.js (wallet-based) |
-| Charts | Recharts |
+| AI Code Gen | Groq SDK (`llama-3.3-70b-versatile`) |
+| Blockchain | PinionOS, viem, wagmi, Base Network |
+| Auth | NextAuth.js v4 + SIWE (Sign-In with Ethereum) |
 
 ---
 
@@ -107,8 +104,8 @@ const { address } = privateKeyToAccount(privateKey);
 ### Prerequisites
 - Node.js 18+
 - PostgreSQL database (Supabase recommended)
-- Anthropic API key
-- Base Sepolia wallet with testnet USDC
+- Groq API key (free at [console.groq.com](https://console.groq.com))
+- Base wallet with USDC (for the test client)
 
 ### Installation
 
@@ -120,30 +117,26 @@ npm install
 
 ### Environment Variables
 
-```bash
-cp .env.example .env.local
-```
-
-Fill in all values in `.env.local`:
+Create `.env.local` in the project root with the following values:
 
 ```env
-DATABASE_URL=postgresql://...         # Supabase Postgres URL
+DATABASE_URL=postgresql://...         # Supabase / Postgres connection URL
 NEXTAUTH_SECRET=                       # 32+ random characters
 NEXTAUTH_URL=http://localhost:3000
-ANTHROPIC_API_KEY=sk-ant-...          # Claude API key
-PINION_PRIVATE_KEY=0x...              # Test wallet (USDC on Base)
-PINION_NETWORK=base-sepolia           # or "base" for mainnet
-FACILITATOR_URL=https://facilitator.payai.network
+GROQ_API_KEY=gsk_...                  # Groq API key (for Llama code generation)
+PINION_PRIVATE_KEY=0x...              # Test wallet private key (USDC on Base)
+PINION_NETWORK=base                    # "base" for mainnet, "base-sepolia" for testnet
+FACILITATOR_URL=https://x402.org/facilitator
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
-ENCRYPT_SECRET=                        # 32-char AES encryption secret
+ENCRYPT_SECRET=                        # 32-char AES encryption secret for wallet keys
 ```
 
 ### Database
 
 ```bash
-npx prisma migrate dev --name init
-# or for quick setup:
 npx prisma db push
+# or for tracked migrations:
+npx prisma migrate dev --name init
 ```
 
 ### Run
@@ -163,20 +156,24 @@ User Browser
     │
     ▼ Next.js App (pila.app)
     │
+    ├── /                — Landing page + live stats
     ├── /marketplace     — Browse all live skills
     ├── /builder         — Create & deploy skills
     ├── /dashboard       — Earnings & skill management
     │
     ▼ Next.js API Routes
     │
-    ├── /api/generate    — Claude code generation
-    ├── /api/skills      — Skill CRUD
-    ├── /api/proxy/[slug]— Forwards to live skill process
-    ├── /api/plugin/[id] — OpenClaw plugin JSON
-    └── /api/withdraw    — USDC withdrawal
+    ├── /api/generate         — Groq code generation
+    ├── /api/skills           — Skill CRUD
+    ├── /api/skills/[skillId] — Single skill detail
+    ├── /api/proxy/[slug]     — Forwards requests to live skill process
+    ├── /api/plugin/[skillId] — OpenClaw plugin JSON
+    ├── /api/test             — Server-side skill test calls (PinionClient)
+    ├── /api/stats            — Platform-wide stats (skills, calls, earned)
+    └── /api/withdraw         — USDC withdrawal
     │
     ▼ Skill Deployment Engine (lib/deploy.ts)
-    │
+    │                         ← auto-restarted on boot via instrumentation.ts
     ├── skill-abc/  ← createSkillServer process  → USDC wallet A
     ├── skill-def/  ← createSkillServer process  → USDC wallet B
     └── skill-ghi/  ← createSkillServer process  → USDC wallet C
@@ -192,7 +189,7 @@ The full demo flow:
 
 1. Connect wallet → navigate to `/builder`
 2. Fill form: Name, description, price, schemas
-3. Click **Generate Handler Code** — Claude writes TypeScript in ~3s
+3. Click **Generate Handler Code** — Groq writes TypeScript in ~2s
 4. Click **Deploy Skill** — watches animated deployment steps
 5. Get live endpoint URL + SDK snippet + OpenClaw plugin
 6. Browse `/marketplace` → test skill from browser with no wallet needed
@@ -205,35 +202,63 @@ The full demo flow:
 ```
 pila/
 ├── app/
-│   ├── page.tsx                    # Landing page
-│   ├── marketplace/page.tsx        # Skill browser
-│   ├── marketplace/[skillId]/      # Skill detail + test panel
-│   ├── builder/page.tsx            # No-code skill creation
-│   ├── dashboard/page.tsx          # Earnings & management
-│   └── api/                        # All backend routes
+│   ├── page.tsx                       # Landing page + stats + featured skills
+│   ├── marketplace/page.tsx           # Skill browser with search & filters
+│   ├── marketplace/[skillId]/         # Skill detail + live test panel
+│   ├── builder/page.tsx               # No-code skill creation
+│   ├── dashboard/page.tsx             # Earnings & skill management
+│   └── api/
+│       ├── generate/route.ts          # Groq code generation
+│       ├── skills/route.ts            # Skill list + create
+│       ├── skills/[skillId]/route.ts  # Skill detail + update + delete
+│       ├── proxy/[slug]/route.ts      # Reverse proxy to skill processes
+│       ├── plugin/[skillId]/route.ts  # OpenClaw plugin JSON
+│       ├── test/route.ts              # PinionClient test calls
+│       ├── stats/route.ts             # Platform stats
+│       ├── withdraw/route.ts          # USDC withdrawal
+│       └── auth/                      # NextAuth + SIWE handlers
 ├── components/
-│   ├── BuilderForm.tsx             # Core no-code builder UI
-│   ├── SkillCard.tsx               # Marketplace grid card
-│   ├── TestSkillPanel.tsx          # Live browser test
-│   ├── SDKSnippet.tsx              # Copy-ready code snippets
-│   ├── DeploymentStatus.tsx        # Animated deploy progress
-│   └── EarningsChart.tsx           # Recharts area chart
+│   ├── BuilderForm.tsx                # Core no-code builder UI
+│   ├── SkillCard.tsx                  # Marketplace grid card
+│   ├── TestSkillPanel.tsx             # Live browser test
+│   ├── SDKSnippet.tsx                 # Copy-ready code snippets
+│   ├── DeploymentStatus.tsx           # Animated deploy progress
+│   ├── EarningsChart.tsx              # Recharts area chart
+│   ├── MetricsBadge.tsx               # Skill metric pill badges
+│   ├── Navbar.tsx                     # Top navigation
+│   ├── ConnectWallet.tsx              # RainbowKit wallet button
+│   ├── Providers.tsx                  # wagmi/RainbowKit/ReactQuery providers
+│   └── ui/                            # Shared UI primitives
 ├── lib/
-│   ├── deploy.ts                   # child_process skill spawner
-│   ├── claude.ts                   # Anthropic SDK wrapper
-│   ├── wallet.ts                   # viem wallet generation
-│   ├── plugin-generator.ts         # OpenClaw JSON builder
-│   └── prisma.ts                   # Prisma singleton
+│   ├── deploy.ts                      # child_process skill spawner + port allocator
+│   ├── claude.ts                      # Groq SDK wrapper (code generation)
+│   ├── wallet.ts                      # viem wallet generation + AES encryption
+│   ├── plugin-generator.ts            # OpenClaw JSON builder
+│   ├── auth.ts                        # NextAuth + SIWE config
+│   ├── wagmi.ts                       # wagmi/viem client config
+│   ├── constants.ts                   # Shared constants
+│   └── prisma.ts                      # Prisma singleton
 ├── skill-runtime/
-│   └── template.ts                 # createSkillServer code template
-└── prisma/schema.prisma            # DB schema
+│   └── template.ts                    # createSkillServer code template
+├── instrumentation.ts                 # Auto-restarts live skills on server boot
+└── prisma/schema.prisma               # DB schema (User, Skill, SkillCall)
 ```
 
 ---
 
-## PinionOS Hackathon 2026
+## Deployment
 
-Built for the PinionOS Hackathon (Feb 22 – Mar 1, 2026).
+Skill deployment uses persistent child processes — **serverless platforms (Vercel) are not supported** for the deploy feature. Use a persistent server:
+
+- [Railway](https://railway.app) — recommended
+- [Render](https://render.com)
+- Any VPS (DigitalOcean, Hetzner, etc.)
+
+The marketplace, builder UI, and read-only API routes work fine on serverless. Only `deploySkill` requires a persistent Node.js process.
+
+---
+
+Built for the PinionOS Hackathon.
 
 **The meta-argument:** PinionOS built an infrastructure primitive. Every skill deployed through PILA is a new earning node in their ecosystem. PILA doesn't just use PinionOS — it multiplies its reach.
 

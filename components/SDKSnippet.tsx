@@ -17,19 +17,25 @@ export function SDKSnippet({ slug, endpointUrl, inputSchema }: Props) {
     Object.entries(inputSchema).map(([k, v]) => [k, v === "number" ? 0 : v === "boolean" ? false : "example"])
   );
 
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const proxyPath = `/api/proxy/${slug}`;
+
   const tsSnippet = `import { PinionClient } from "pinion-os";
 
 const client = new PinionClient({
   privateKey: process.env.PINION_PRIVATE_KEY,
+  apiUrl: "${baseUrl}",
+  network: "base-sepolia",
 });
 
-const result = await client.callSkill(
-  "${endpointUrl}",
+const result = await client.request(
+  "POST",
+  "${proxyPath}",
   ${JSON.stringify(sampleInput, null, 2)}
 );
-console.log(result);`;
+console.log(result.data);`;
 
-  const curlSnippet = `curl -X POST "${endpointUrl}" \\
+  const curlSnippet = `curl -X POST "${baseUrl}${proxyPath}" \\
   -H "Content-Type: application/json" \\
   -H "X-PAYMENT: <your-signed-payment>" \\
   -d '${JSON.stringify(sampleInput)}'`;
