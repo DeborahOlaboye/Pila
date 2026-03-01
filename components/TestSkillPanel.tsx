@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useSignTypedData } from "wagmi";
+import { useAccount, useSignTypedData, useSwitchChain } from "wagmi";
 import { Play, Loader2, CheckCircle2, XCircle, Wallet } from "lucide-react";
 
 interface Props {
@@ -66,8 +66,9 @@ function getChainId(network: string): number {
 
 export function TestSkillPanel({ slug, priceUsd, inputSchema }: Props) {
   const hasInputs = Object.keys(inputSchema).length > 0;
-  const { address } = useAccount();
+  const { address, chainId: connectedChainId } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
+  const { switchChainAsync } = useSwitchChain();
 
   const [fields, setFields] = useState<Record<string, string | number | boolean>>(
     () => initFields(inputSchema)
@@ -93,23 +94,41 @@ export function TestSkillPanel({ slug, priceUsd, inputSchema }: Props) {
       body: JSON.stringify(fields),
     });
 
+    const latencyMs = Date.now() - start;
+
+    // Parse response safely — skill servers may return non-JSON on error
+    const text = await res.text();
+    let body: unknown;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Skill returned an unexpected response (HTTP ${res.status}). ` +
+        `Make sure the skill is deployed and running.`
+      );
+    }
+
     // ── x402: payment required ───────────────────────────────────────────
     if (res.status === 402) {
-      const body = await res.json();
-      if (body.accepts?.length > 0) {
-        setPending402({ x402Version: body.x402Version ?? 1, requirements: body.accepts[0] });
+      const b = body as { x402Version?: number; accepts?: PaymentRequirements[]; error?: string };
+
+      // If we already sent X-PAYMENT and still got 402, the facilitator rejected it
+      if (xPayment) {
+        throw new Error(`Payment rejected: ${b.error || "facilitator could not verify the payment"}`);
+      }
+
+      if (b.accepts && b.accepts.length > 0) {
+        setPending402({ x402Version: b.x402Version ?? 1, requirements: b.accepts[0] });
       } else {
         setError("Payment required but could not parse requirements.");
       }
       return;
     }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Call failed");
+    const data = body as Record<string, unknown>;
+    if (!res.ok) throw new Error((data as { error?: string }).error || "Call failed");
 
-    const latencyMs = Date.now() - start;
-    const raw = data;
-    setResult(raw && typeof raw === "object" ? raw : { result: raw });
+    setResult(data && typeof data === "object" ? data : { result: data });
     setLatency(latencyMs);
     setPending402(null);
   }
@@ -134,6 +153,13 @@ export function TestSkillPanel({ slug, priceUsd, inputSchema }: Props) {
     setError(null);
     try {
       const { x402Version, requirements } = pending402;
+      const requiredChainId = getChainId(requirements.network);
+
+      // Switch chain if the wallet is on a different network
+      if (connectedChainId !== requiredChainId) {
+        await switchChainAsync({ chainId: requiredChainId });
+      }
+
       const nonce = randomBytes32();
       const nowSec = Math.floor(Date.now() / 1000);
       const validAfter = BigInt(nowSec - 600);

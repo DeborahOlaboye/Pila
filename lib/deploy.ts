@@ -15,6 +15,22 @@ function allocatePort(): number {
 
 const isVercel = !!process.env.VERCEL;
 
+/** Kill any process listening on `port` (best-effort, non-fatal). */
+async function freePort(port: number): Promise<void> {
+  try {
+    const { execSync } = await import("child_process");
+    // lsof works on macOS/Linux; suppress errors on Windows/no match
+    const pids = execSync(`lsof -ti tcp:${port}`, { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    for (const pid of pids) {
+      try { process.kill(parseInt(pid), "SIGKILL"); } catch { /* already gone */ }
+    }
+  } catch { /* lsof not available or no process on port */ }
+}
+
 export async function deploySkill(skill: {
   id: string;
   name: string;
@@ -53,6 +69,9 @@ export async function deploySkill(skill: {
   });
   await fs.writeFile(skillFile, wrapperCode);
 
+  // Kill anything still occupying this port (e.g. a zombie from a previous deploy)
+  await freePort(port);
+
   const projectRoot = path.resolve(process.cwd());
   const child = spawn(process.execPath, [skillFile], {
     env: {
@@ -61,7 +80,7 @@ export async function deploySkill(skill: {
       ADDRESS: walletAddress,
       PINION_PRIVATE_KEY: privateKey,
       FACILITATOR_URL:
-        process.env.FACILITATOR_URL || "https://facilitator.payai.network",
+        process.env.FACILITATOR_URL || "https://x402.org/facilitator",
       PINION_NETWORK: process.env.PINION_NETWORK || "base",
       PILA_IPC: "1",
       // Allow temp skill file to resolve node_modules from project root
@@ -145,6 +164,14 @@ export async function restartLiveSkills(): Promise<void> {
 
   const liveSkills = await prisma.skill.findMany({ where: { status: "LIVE" } });
 
+  // Bump nextPort past all ports already reserved by live skills so new
+  // deployments never collide with restarted skill processes.
+  for (const skill of liveSkills) {
+    if (skill.port && skill.port >= nextPort) {
+      nextPort = skill.port + 1;
+    }
+  }
+
   for (const skill of liveSkills) {
     if (!skill.walletKey || !skill.port) continue;
     if (runningProcesses.has(skill.id)) continue;
@@ -168,6 +195,9 @@ export async function restartLiveSkills(): Promise<void> {
       });
       await fs.writeFile(skillFile, wrapperCode);
 
+      // Free the port in case a zombie is still holding it
+      await freePort(skill.port);
+
       const projectRoot = path.resolve(process.cwd());
       const child = spawn(process.execPath, [skillFile], {
         env: {
@@ -175,7 +205,7 @@ export async function restartLiveSkills(): Promise<void> {
           SKILL_PORT: String(skill.port),
           ADDRESS: skill.walletAddress!,
           PINION_PRIVATE_KEY: privateKey,
-          FACILITATOR_URL: process.env.FACILITATOR_URL || "https://facilitator.payai.network",
+          FACILITATOR_URL: process.env.FACILITATOR_URL || "https://x402.org/facilitator",
           PINION_NETWORK: process.env.PINION_NETWORK || "base",
           PILA_IPC: "1",
           NODE_PATH: path.join(projectRoot, "node_modules"),

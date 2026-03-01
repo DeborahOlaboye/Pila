@@ -27,19 +27,23 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const skills = await prisma.skill.findMany({
-    where,
-    orderBy: { totalCalls: "desc" },
-    select: {
-      id: true, name: true, slug: true, description: true,
-      category: true, priceUsd: true, totalCalls: true,
-      totalEarned: true, status: true, endpointUrl: true,
-      createdAt: true, walletAddress: true, tags: true,
-      inputSchema: true, outputSchema: true,
-    },
-  });
-
-  return NextResponse.json(skills);
+  try {
+    const skills = await prisma.skill.findMany({
+      where,
+      orderBy: { totalCalls: "desc" },
+      select: {
+        id: true, name: true, slug: true, description: true,
+        category: true, priceUsd: true, totalCalls: true,
+        totalEarned: true, status: true, endpointUrl: true,
+        createdAt: true, walletAddress: true, tags: true,
+        inputSchema: true, outputSchema: true,
+      },
+    });
+    return NextResponse.json(skills);
+  } catch (err) {
+    console.error("[GET /api/skills] DB error:", err);
+    return NextResponse.json({ error: "Database unavailable. Please try again shortly." }, { status: 500 });
+  }
 }
 
 const createSchema = z.object({

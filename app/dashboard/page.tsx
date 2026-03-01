@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Play, Square, Trash2, TrendingUp, Zap, BarChart3, Wallet, ExternalLink, Pencil, Check, X } from "lucide-react";
+import { Play, Square, Trash2, TrendingUp, Zap, BarChart3, Wallet, ExternalLink, Pencil, Check, X, Code2 } from "lucide-react";
+import { toast } from "sonner";
 import { EarningsChart } from "@/components/EarningsChart";
 import { Skill } from "@/types";
 
@@ -32,6 +33,8 @@ export default function DashboardPage() {
   const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [editingPrice, setEditingPrice] = useState<{ id: string; value: string } | null>(null);
+  const [codeModal, setCodeModal] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [codeSaving, setCodeSaving] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") { router.push("/"); }
@@ -40,16 +43,33 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!session) return;
     async function load() {
-      const res = await fetch("/api/skills?mine=1");
-      const data = await res.json();
-      setSkills(data);
-      setLoading(false);
-      // Load chart data from first skill with calls
-      const withCalls = data.find((s: Skill) => s.totalCalls > 0);
-      if (withCalls) {
-        const mRes = await fetch(`/api/skills/${withCalls.id}/metrics`);
-        const mData = await mRes.json();
-        setChartData(mData.dailyEarnings || []);
+      try {
+        const res = await fetch("/api/skills?mine=1");
+        if (!res.ok) {
+          const text = await res.text();
+          let msg = `Failed to load skills (${res.status})`;
+          try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch { }
+          toast.error(msg, { duration: 10000 });
+          setLoading(false);
+          return;
+        }
+        const data = await res.json();
+        setSkills(data);
+        setLoading(false);
+        // Load chart data from first skill with calls
+        const withCalls = data.find((s: Skill) => s.totalCalls > 0);
+        if (withCalls) {
+          try {
+            const mRes = await fetch(`/api/skills/${withCalls.id}/metrics`);
+            if (mRes.ok) {
+              const mData = await mRes.json();
+              setChartData(mData.dailyEarnings || []);
+            }
+          } catch { /* chart is non-critical */ }
+        }
+      } catch (err) {
+        toast.error(`Could not reach server: ${String(err)}`, { duration: 10000 });
+        setLoading(false);
       }
     }
     load();
@@ -64,15 +84,26 @@ export default function DashboardPage() {
     await fetch(`/api/skills/${id}/deploy`, { method: "POST" });
     setSkills((prev) => prev.map((s) => s.id === id ? { ...s, status: "DEPLOYING" } : s));
     setTimeout(async () => {
-      const res = await fetch("/api/skills?mine=1");
-      setSkills(await res.json());
+      try {
+        const res = await fetch("/api/skills?mine=1");
+        if (res.ok) setSkills(await res.json());
+      } catch { /* ignore refresh error */ }
     }, 8000);
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this skill?")) return;
-    await fetch(`/api/skills/${id}`, { method: "DELETE" });
-    setSkills((prev) => prev.filter((s) => s.id !== id));
+    toast("Delete this skill?", {
+      duration: 8000,
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          await fetch(`/api/skills/${id}`, { method: "DELETE" });
+          setSkills((prev) => prev.filter((s) => s.id !== id));
+          toast.success("Skill deleted");
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
   }
 
   async function handleSavePrice(id: string) {
@@ -88,12 +119,47 @@ export default function DashboardPage() {
     setEditingPrice(null);
   }
 
+  async function handleOpenCode(id: string, name: string) {
+    const res = await fetch(`/api/skills/${id}`);
+    const data = await res.json();
+    setCodeModal({ id, name, code: data.handlerCode || "" });
+  }
+
+  async function handleSaveCode() {
+    if (!codeModal) return;
+    setCodeSaving(true);
+    try {
+      const res = await fetch(`/api/skills/${codeModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handlerCode: codeModal.code }),
+      });
+      if (!res.ok) { toast.error("Failed to save code"); return; }
+      toast.success("Code saved — redeploy to apply changes");
+      setCodeModal(null);
+    } catch {
+      toast.error("Failed to save code");
+    } finally {
+      setCodeSaving(false);
+    }
+  }
+
   async function handleWithdraw(id: string) {
     setWithdrawing(id);
-    const res = await fetch("/api/withdraw", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ skillId: id }) });
-    const data = await res.json();
-    setTxHash(data.txHash);
-    setWithdrawing(null);
+    try {
+      const res = await fetch("/api/withdraw", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ skillId: id }) });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Withdraw failed", { duration: 10000 });
+        return;
+      }
+      setTxHash(data.txHash);
+      toast.success(`Withdrew $${data.amount?.toFixed(4)} USDC`, { duration: 6000 });
+    } catch {
+      toast.error("Withdraw failed — check your connection");
+    } finally {
+      setWithdrawing(null);
+    }
   }
 
   const totalEarned = skills.reduce((s, sk) => s + sk.totalEarned, 0);
@@ -254,6 +320,9 @@ export default function DashboardPage() {
                             <Play size={11} /> Start
                           </button>
                         ) : null}
+                        <button onClick={() => handleOpenCode(s.id, s.name)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid #2A2A35", background: "transparent", color: "#8B5CF6", cursor: "pointer" }} title="View/Edit handler code">
+                          <Code2 size={12} />
+                        </button>
                         <button onClick={() => handleDelete(s.id)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid #2A2A35", background: "transparent", color: "#6B7280", cursor: "pointer" }}>
                           <Trash2 size={12} />
                         </button>
@@ -266,6 +335,52 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+      {/* Code editor modal */}
+      {codeModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)" }} onClick={() => setCodeModal(null)} />
+          <div style={{ position: "relative", width: "100%", maxWidth: 760, borderRadius: 16, background: "#1A1A1F", border: "1px solid #2A2A35", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #2A2A35" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Code2 size={15} style={{ color: "#8B5CF6" }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#F9FAFB" }}>Handler Code — {codeModal.name}</span>
+              </div>
+              <button onClick={() => setCodeModal(null)} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer" }}><X size={16} /></button>
+            </div>
+            {/* Code area */}
+            <div style={{ padding: 16, flex: 1, overflow: "auto" }}>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#6B7280" }}>
+                This is the body of the Express handler. Edit and save, then redeploy the skill for changes to take effect.
+              </p>
+              <textarea
+                value={codeModal.code}
+                onChange={(e) => setCodeModal({ ...codeModal, code: e.target.value })}
+                spellCheck={false}
+                style={{
+                  width: "100%", minHeight: 300, padding: 14, borderRadius: 8,
+                  background: "#0F0F11", border: "1px solid #2A2A35",
+                  color: "#F9FAFB", fontFamily: "JetBrains Mono, monospace", fontSize: 13,
+                  lineHeight: 1.6, resize: "vertical", outline: "none", boxSizing: "border-box",
+                }}
+              />
+            </div>
+            {/* Footer */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "14px 20px", borderTop: "1px solid #2A2A35" }}>
+              <button onClick={() => setCodeModal(null)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #2A2A35", background: "transparent", color: "#6B7280", fontSize: 13, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCode}
+                disabled={codeSaving}
+                style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #7C3AED, #8B5CF6)", color: "white", fontSize: 13, fontWeight: 600, cursor: codeSaving ? "not-allowed" : "pointer", opacity: codeSaving ? 0.7 : 1 }}
+              >
+                {codeSaving ? "Saving…" : "Save Code"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

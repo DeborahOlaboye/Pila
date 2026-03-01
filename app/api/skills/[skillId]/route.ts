@@ -36,11 +36,23 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const priceUsd = typeof body.priceUsd === "number" ? body.priceUsd : parseFloat(body.priceUsd);
-  if (isNaN(priceUsd) || priceUsd <= 0)
-    return NextResponse.json({ error: "priceUsd must be a positive number" }, { status: 400 });
+  const data: Record<string, unknown> = {};
 
-  const updated = await prisma.skill.update({ where: { id: skillId }, data: { priceUsd } });
+  if (body.priceUsd !== undefined) {
+    const priceUsd = typeof body.priceUsd === "number" ? body.priceUsd : parseFloat(body.priceUsd);
+    if (isNaN(priceUsd) || priceUsd <= 0)
+      return NextResponse.json({ error: "priceUsd must be a positive number" }, { status: 400 });
+    data.priceUsd = priceUsd;
+  }
+
+  if (typeof body.handlerCode === "string" && body.handlerCode.trim()) {
+    data.handlerCode = body.handlerCode.trim();
+  }
+
+  if (Object.keys(data).length === 0)
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  const updated = await prisma.skill.update({ where: { id: skillId }, data });
   return NextResponse.json(updated);
 }
 

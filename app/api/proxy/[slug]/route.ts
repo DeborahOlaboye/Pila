@@ -5,6 +5,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  try {
   const { slug } = await params;
   const skill = await prisma.skill.findUnique({ where: { slug } });
 
@@ -38,6 +39,13 @@ export async function POST(
   // caller so they can sign a payment and retry with X-PAYMENT.
   if (upstreamRes.status === 402) {
     const requirementsBody = await upstreamRes.text();
+    // Log rejection reason if this was a paid retry
+    if (xPayment) {
+      try {
+        const parsed = JSON.parse(requirementsBody);
+        console.error(`[proxy] x402 payment rejected for ${slug}:`, parsed.error ?? requirementsBody);
+      } catch { /* ignore */ }
+    }
     return new NextResponse(requirementsBody, {
       status: 402,
       headers: {
@@ -72,4 +80,8 @@ export async function POST(
   if (xPaymentResponse) resHeaders["X-PAYMENT-RESPONSE"] = xPaymentResponse;
 
   return new NextResponse(responseText, { status: upstreamRes.status, headers: resHeaders });
+  } catch (err) {
+    console.error("[proxy] Unhandled error:", err);
+    return NextResponse.json({ error: "Internal proxy error" }, { status: 500 });
+  }
 }

@@ -23,7 +23,14 @@ Rules:
 - Use native fetch() for HTTP calls
 - Return data via res.json({ ... })
 - No exotic npm packages
-- Under 25 lines`;
+- Under 25 lines
+
+ABSOLUTE RULES — violation will break the skill:
+- NEVER use placeholder, fictional, or example URLs such as api.example.com, example.org, placeholder.com, or any URL you are not certain is real and publicly accessible without authentication.
+- If the skill requires an external API that needs a key or doesn't exist as a free public endpoint, implement the logic directly in JavaScript instead (calculations, string manipulation, etc.) and return a computed result.
+- Only call real, free, no-auth-required public APIs. Known working examples: wttr.in (weather), api.coinbase.com/v2/prices/:pair/spot (crypto price), api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd (crypto), numbersapi.com/:number (trivia), api.adviceslip.com/advice (advice).
+- When in doubt, compute the answer with JavaScript math/logic rather than inventing an API URL.`;
+
 
 export async function generateHandlerCode(params: {
   name: string;
