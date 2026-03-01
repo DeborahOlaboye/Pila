@@ -19,6 +19,6 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
     return NextResponse.json({ result: data, latencyMs: Date.now() - start });
   } catch {
-    return NextResponse.json({ error: "Call failed" }, { status: 503 });
+    return NextResponse.json({ error: "Skill process is not running. Go to your Dashboard and redeploy the skill." }, { status: 503 });
   }
 }
